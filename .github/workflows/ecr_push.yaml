@@ -1,0 +1,42 @@
+name: Build and Push Docker Image
+on:
+  push:
+    branches:
+      - main
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Login to Amazon ECR Public
+        run: |
+          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/n9b8b2z2
+      - name: Build Docker Image
+        run: |
+          docker build -t docker/imagine .
+      - name: Tag Docker Image for Public ECR
+        run: |
+          docker tag docker/imagine:latest public.ecr.aws/n9b8b2z2/docker/imagine:latest
+      - name: Push Docker Image to ECR
+        run: |
+          docker push public.ecr.aws/n9b8b2z2/docker/imagine:latest
+      # - name: Update ECS Task Definition
+      #   id: update-task-def
+      #   uses: aws-actions/amazon-ecs-render-task-definition@v1
+      #   with:
+      #     task-definition: task-definition.json
+      #     container-name: my-app-container
+      #     image: {{ steps.login-ecr.outputs.registry }}/my-app-repo:{{ github.sha }}
+      # - name: Deploy to ECS using Blue/Green Deployment
+      #   run: |
+      #     aws deploy create-deployment \
+      #       --application-name my-ecs-app \
+      #       --deployment-group-name my-ecs-deployment-group \
+      #       --revision revisionType=AppSpecContent,appSpecContent='{"version":"0.0","Resources":[{"TargetService":{"Type":"AWS::ECS::Service","Properties":{"TaskDefinition":"${{ steps.update-task-def.outputs.task-definition-arn }}","LoadBalancerInfo":{"ContainerName":"my-app-container","ContainerPort":80}}}}]}'
