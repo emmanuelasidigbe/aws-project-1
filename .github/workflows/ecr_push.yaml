@@ -15,18 +15,18 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
-      - name: Login to Amazon ECR Public
+      - name: Login to Amazon ECR Private
         run: |
-          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/n9b8b2z2
+          aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin 941377159625.dkr.ecr.eu-north-1.amazonaws.com
       - name: Build Docker Image
         run: |
           docker build -t docker/imagine .
-      - name: Tag Docker Image for Public ECR
+      - name: Tag Docker Image for Private ECR
         run: |
-          docker tag docker/imagine:latest public.ecr.aws/n9b8b2z2/docker/imagine:latest
+          docker tag docker/imagine:latest 941377159625.dkr.ecr.eu-north-1.amazonaws.com/docker/imagine:latest
       - name: Push Docker Image to ECR
         run: |
-          docker push public.ecr.aws/n9b8b2z2/docker/imagine:latest
+          docker push 941377159625.dkr.ecr.eu-north-1.amazonaws.com/docker/imagine:latest
       # - name: Update ECS Task Definition
       #   id: update-task-def
       #   uses: aws-actions/amazon-ecs-render-task-definition@v1
