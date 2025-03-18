@@ -27,16 +27,26 @@ jobs:
       - name: Push Docker Image to ECR
         run: |
           docker push 941377159625.dkr.ecr.eu-north-1.amazonaws.com/docker/imagine:latest
-      # - name: Update ECS Task Definition
-      #   id: update-task-def
-      #   uses: aws-actions/amazon-ecs-render-task-definition@v1
-      #   with:
-      #     task-definition: task-definition.json
-      #     container-name: my-app-container
-      #     image: {{ steps.login-ecr.outputs.registry }}/my-app-repo:{{ github.sha }}
-      # - name: Deploy to ECS using Blue/Green Deployment
-      #   run: |
-      #     aws deploy create-deployment \
-      #       --application-name my-ecs-app \
-      #       --deployment-group-name my-ecs-deployment-group \
-      #       --revision revisionType=AppSpecContent,appSpecContent='{"version":"0.0","Resources":[{"TargetService":{"Type":"AWS::ECS::Service","Properties":{"TaskDefinition":"${{ steps.update-task-def.outputs.task-definition-arn }}","LoadBalancerInfo":{"ContainerName":"my-app-container","ContainerPort":80}}}}]}'
+
+      - name: Fetch Existing Task Definition from AWS
+        run: |
+          aws ecs describe-task-definition --task-definition imagine-app-task \
+          --query taskDefinition > task-definition.json
+
+      - name: Update Task Definition with Latest Image
+        run: |
+          jq '.containerDefinitions[0].image="941377159625.dkr.ecr.eu-north-1.amazonaws.com/imagine-app:latest"' task-definition.json > updated-task-def.json
+
+      - name: Register New Task Definition
+        run: |
+          NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://updated-task-def.json \
+          --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "TASK_DEF_ARN=$NEW_TASK_DEF_ARN" >> $GITHUB_ENV
+
+      - name: Deploy New Task Definition to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ env.TASK_DEF_ARN }}
+          service: imagine-service
+          cluster: imagine-cluster
+          wait-for-service-stability: true

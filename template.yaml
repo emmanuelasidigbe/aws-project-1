@@ -1,38 +1,25 @@
-AWSTemplateFormatVersion: "2010-09-09"
-Description: "CloudFormation template for a custom VPC with public/private subnets, IGW, and an S3 VPC Endpoint"
-
-Parameters:
-  VpcCidr:
-    Type: String
-    Default: "10.0.0.0/16"
-  PublicSubnet1Cidr:
-    Type: String
-    Default: "10.0.1.0/24"
-  PublicSubnet2Cidr:
-    Type: String
-    Default: "10.0.2.0/24"
-  PrivateSubnet1Cidr:
-    Type: String
-    Default: "10.0.3.0/24"
-  PrivateSubnet2Cidr:
-    Type: String
-    Default: "10.0.4.0/24"
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'VPC for ECS Deployment with Private Subnets and NAT Gateway'
 
 Resources:
-  # Create VPC
+  # VPC
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !Ref VpcCidr
+      CidrBlock: 10.0.0.0/16
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: CustomVPC
+          Value: ProjectOneVPC
 
-  # Internet Gateway for Public Subnets
+  # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: MyInternetGateway
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -40,53 +27,51 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
-  # Public Subnet 1
+  # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Ref PublicSubnet1Cidr
+      CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
-      AvailabilityZone: !Select [0, !GetAZs ""]
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: PublicSubnet-1
+          Value: PublicSubnet1
 
-  # Public Subnet 2
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Ref PublicSubnet2Cidr
+      CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: true
-      AvailabilityZone: !Select [1, !GetAZs ""]
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: PublicSubnet-2
+          Value: PublicSubnet2
 
-  # Private Subnet 1
+  # Private Subnets
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Ref PrivateSubnet1Cidr
+      CidrBlock: 10.0.3.0/24
       MapPublicIpOnLaunch: false
-      AvailabilityZone: !Select [0, !GetAZs ""]
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: PrivateSubnet-1
+          Value: PrivateSubnet1
 
-  # Private Subnet 2
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Ref PrivateSubnet2Cidr
+      CidrBlock: 10.0.4.0/24
       MapPublicIpOnLaunch: false
-      AvailabilityZone: !Select [1, !GetAZs ""]
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: PrivateSubnet-2
+          Value: PrivateSubnet2
 
   # Public Route Table
   PublicRouteTable:
@@ -102,16 +87,16 @@ Resources:
     DependsOn: VPCGatewayAttachment
     Properties:
       RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: "0.0.0.0/0"
+      DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  PublicSubnet1RouteTableAssociation:
+  PublicSubnetRouteTableAssociation1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
 
-  PublicSubnet2RouteTableAssociation:
+  PublicSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2
@@ -126,50 +111,61 @@ Resources:
         - Key: Name
           Value: PrivateRouteTable
 
-  PrivateSubnet1RouteTableAssociation:
+  PrivateSubnetRouteTableAssociation1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet1
       RouteTableId: !Ref PrivateRouteTable
 
-  PrivateSubnet2RouteTableAssociation:
+  PrivateSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
-  # S3 VPC Endpoint
-  S3VPCEndpoint:
-    Type: AWS::EC2::VPCEndpoint
+  # NAT Gateway EIP
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
     Properties:
-      VpcId: !Ref VPC
-      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
-      RouteTableIds:
-        - !Ref PrivateRouteTable
-      VpcEndpointType: Gateway
+      Domain: vpc
       Tags:
         - Key: Name
-          Value: S3VPCEndpoint
+          Value: NatGatewayEIP
+
+  # NAT Gateway
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: NatGateway
+
+  # Update Private Route Table with NAT Route
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
 
 Outputs:
   VPCId:
-    Description: "VPC ID"
+    Description: 'VPC ID'
     Value: !Ref VPC
-  PublicSubnet1:
-    Description: "Public Subnet 1"
+  PublicSubnet1Id:
+    Description: 'Public Subnet 1 ID'
     Value: !Ref PublicSubnet1
-  PublicSubnet2:
-    Description: "Public Subnet 2"
+  PublicSubnet2Id:
+    Description: 'Public Subnet 2 ID'
     Value: !Ref PublicSubnet2
-  PrivateSubnet1:
-    Description: "Private Subnet 1"
+  PrivateSubnet1Id:
+    Description: 'Private Subnet 1 ID'
     Value: !Ref PrivateSubnet1
-  PrivateSubnet2:
-    Description: "Private Subnet 2"
+  PrivateSubnet2Id:
+    Description: 'Private Subnet 2 ID'
     Value: !Ref PrivateSubnet2
-  InternetGateway:
-    Description: "Internet Gateway ID"
-    Value: !Ref InternetGateway
-  S3VPCEndpoint:
-    Description: "S3 VPC Endpoint ID"
-    Value: !Ref S3VPCEndpoint
+  NatGatewayId:
+    Description: 'NAT Gateway ID'
+    Value: !Ref NatGateway
