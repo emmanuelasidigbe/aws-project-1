@@ -31,16 +31,18 @@ jobs:
       - name: Fetch Existing Task Definition from AWS
         run: |
           aws ecs describe-task-definition --task-definition imagine-task \
-          --query taskDefinition > task-definition.json
+          --query taskDefinition --output json > task-definition.json
 
       - name: Update Task Definition with Latest Image
         run: |
-          jq '.containerDefinitions[0].image="941377159625.dkr.ecr.eu-north-1.amazonaws.com/imagine:latest"' task-definition.json > updated-task-def.json
+          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) | 
+              .containerDefinitions[0].image="941377159625.dkr.ecr.eu-north-1.amazonaws.com/imagine:latest"' \
+              task-definition.json > updated-task-def.json
 
       - name: Register New Task Definition
         run: |
           NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://updated-task-def.json \
-          --query 'taskDefinition.taskDefinitionArn' --output text)
+          --query 'taskDefinition.taskDefinitionArn' --output text --region eu-north-1)
           echo "TASK_DEF_ARN=$NEW_TASK_DEF_ARN" >> $GITHUB_ENV
 
       - name: Deploy New Task Definition to ECS
