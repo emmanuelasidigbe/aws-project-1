@@ -33,4 +33,4 @@ jobs:
             --application-name AppECS-imagine-cluster-imagine-service \
             --deployment-group-name DgpECS-imagine-cluster-imagine-service \
             --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
-            --revision "{\"revisionType\": \"AppSpecContent\", \"appSpecContent\": { \"content\": \"$(jq -c . appspec.json)\" } }"
+            --revision "{\"revisionType\": \"AppSpecContent\", \"appSpecContent\": { \"content\": \"$(jq -c . appspec.json | sed 's/"/\\"/g')\" } }"
